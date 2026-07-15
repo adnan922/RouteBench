@@ -8,10 +8,10 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 
 ## Current Status (read this first)
 
-**Phase:** 0 — Setup, in progress.
-**Last thing done:** Phase 1 dataset (GSM8K + MMLU-style mix) and Phase 2 domain (Retail Pharmacy Inventory & Procurement) confirmed. Repo scaffolded: Docker setup, provider clients (Groq/SambaNova), Supabase client + schema, CI, and a setup-verification script are all written and tested for correctness in isolation.
-**Next thing to do:** You'll need to create accounts and get this scaffold onto real infrastructure — see the "(you)" items in Phase 0 below. Once done, run `scripts/verify_setup.py` to confirm everything's actually reachable.
-**Blocked on:** Your accounts/credentials for GitHub, Groq, SambaNova, and Supabase — nothing an AI assistant can do on your behalf here.
+**Phase:** 0 — Setup, functionally complete.
+**Last thing done:** `scripts/verify_setup.py` passed all three checks on the real home server — Groq, SambaNova, and Supabase all confirmed reachable and working end-to-end.
+**Next thing to do:** Phase 0 is fully wrapped — move into Phase 1: router baselines and feature extraction.
+**Blocked on:** Nothing.
 
 ---
 
@@ -35,12 +35,12 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [x] Finalize Phase 2 domain: Retail Pharmacy Inventory & Procurement (spec in `PROJECT.md` §3.1)
 
 *Requires you specifically (accounts/credentials/physical server — not something an AI assistant can do for you):*
-- [ ] **(you)** Create the GitHub repo and push this scaffold
-- [ ] **(you)** Get a Groq API key, add to `.env`
-- [ ] **(you)** Get a SambaNova Cloud API key, add to `.env`
-- [ ] **(you)** Create a Supabase project, run `sql/schema.sql` in its SQL editor, add the URL/key to `.env`
-- [ ] **(you)** Add `SUPABASE_URL` / `SUPABASE_KEY` as GitHub repo secrets (for the scheduled keep-alive workflow)
-- [ ] **(you)** On the home server: `docker compose build`, then `docker compose run app python -m scripts.verify_setup`
+- [x] Confirm the GitHub repo is created and pushed — done
+- [x] Get a Groq API key, add to `.env` — confirmed working (2.54s response)
+- [x] Get a SambaNova Cloud API key, add to `.env` — confirmed working (1.59s response)
+- [x] Create a Supabase project, run `sql/schema.sql`, add URL/key to `.env` — confirmed working (insert + upsert both succeeded)
+- [x] Add `SUPABASE_URL` / `SUPABASE_KEY` as GitHub repo secrets — done
+- [x] On the home server: `docker compose build`, then `docker compose run app python -m scripts.verify_setup` — all three services PASS
 
 **Phase 1 — Router / Cascade**
 - [ ] Baseline runners: always-cheap, always-expensive, random-routing
@@ -77,7 +77,7 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [ ]
 
 ### In Progress
-*(nothing yet)*
+- **Phase 1 — Router / Cascade**
 
 ### Blocked
 *(nothing yet)*
@@ -147,6 +147,9 @@ Confirmed Phase 1 dataset (GSM8K + MMLU-style mix) and Phase 2 domain (Retail Ph
 
 **2026-07-15 — First real deployment attempt**
 `docker compose build` succeeded on the actual home server (~25 min — slow but it works, confirming the hardware handles this fine). `docker compose run app python scripts/verify_setup.py` then hit `ModuleNotFoundError: No module named 'src'` — running a script by file path only puts that script's own directory on `sys.path`, not the project root, so the `from src...` imports couldn't resolve. Fixed by adding `scripts/__init__.py` and switching every invocation to module style (`python -m scripts.verify_setup`), which adds the current working directory to `sys.path` automatically. Applied consistently in `README.md`, both scripts' docstrings, and the keepalive GitHub Action, since it had the identical latent bug and hadn't been run yet. Reproduced the failure and confirmed the fix in isolation before sending it back.
+
+**2026-07-15 — Phase 0 verified end-to-end**
+Applied the module-invocation fix; re-ran `docker compose run app python -m scripts.verify_setup` on the real home server. All three services passed: Groq responded in 2.54s, SambaNova in 1.59s, Supabase's insert and heartbeat upsert both succeeded — confirming the schema was applied correctly. Phase 0 is functionally done. Remaining open items are just confirming the GitHub push and adding repo secrets, neither of which blocks starting Phase 1.
 
 ## Open Questions
 
