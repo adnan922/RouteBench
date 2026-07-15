@@ -2,6 +2,9 @@
 
 Needs SUPABASE_URL / SUPABASE_KEY set as environment variables — GitHub repo
 secrets in CI, or your local .env when run manually.
+
+Run as a module: `python -m scripts.keepalive` (not `python scripts/keepalive.py`
+— see the note in verify_setup.py for why).
 """
 
 from __future__ import annotations

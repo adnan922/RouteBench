@@ -1,10 +1,14 @@
 """Run this once you've filled in .env, to confirm all three services are reachable.
 
-    docker compose run app python scripts/verify_setup.py
+    docker compose run app python -m scripts.verify_setup
 
 or, without Docker, from a venv with requirements.txt installed:
 
-    python scripts/verify_setup.py
+    python -m scripts.verify_setup
+
+Note: run as a module (-m), not as a file path. `python scripts/verify_setup.py`
+puts scripts/'s own directory on sys.path instead of the project root, which
+breaks the `from src...` imports below with ModuleNotFoundError.
 """
 
 from __future__ import annotations

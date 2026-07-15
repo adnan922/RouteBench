@@ -15,7 +15,7 @@ Phase 0 — infrastructure scaffolded, awaiting real credentials. See `PROGRESS.
 1. Copy `.env.example` to `.env` and fill in your own Groq, SambaNova, and Supabase credentials.
 2. Run `sql/schema.sql` in your Supabase project's SQL editor.
 3. `docker compose build`
-4. `docker compose run app python scripts/verify_setup.py`
+4. `docker compose run app python -m scripts.verify_setup`
 
 ## Stack
 

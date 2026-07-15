@@ -40,7 +40,7 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [ ] **(you)** Get a SambaNova Cloud API key, add to `.env`
 - [ ] **(you)** Create a Supabase project, run `sql/schema.sql` in its SQL editor, add the URL/key to `.env`
 - [ ] **(you)** Add `SUPABASE_URL` / `SUPABASE_KEY` as GitHub repo secrets (for the scheduled keep-alive workflow)
-- [ ] **(you)** On the home server: `docker compose build`, then `docker compose run app python scripts/verify_setup.py`
+- [ ] **(you)** On the home server: `docker compose build`, then `docker compose run app python -m scripts.verify_setup`
 
 **Phase 1 — Router / Cascade**
 - [ ] Baseline runners: always-cheap, always-expensive, random-routing
@@ -144,6 +144,9 @@ Planning phase complete. Journey: started with a local vLLM-on-Colab serving ben
 Confirmed Phase 1 dataset (GSM8K + MMLU-style mix) and Phase 2 domain (Retail Pharmacy Inventory & Procurement, scoped to back-office logistics). Verified Groq's and SambaNova's current OpenAI-compatible base URLs against their docs rather than assuming. Scaffolded the full repo: Docker setup, a shared `OpenAICompatibleProvider` base class with thin Groq/SambaNova subclasses, a Supabase client + schema (`runs` + `heartbeat` tables), GitHub Actions CI and a scheduled keep-alive ping, and `scripts/verify_setup.py`. Everything was syntax-checked, lint-checked, and unit-tested in isolation; live integration tests are marked to skip automatically without real API keys. Handed off as a zip — remaining Phase 0 items all require your own accounts/credentials, which is out of reach for an AI assistant by design.
 
 ---
+
+**2026-07-15 — First real deployment attempt**
+`docker compose build` succeeded on the actual home server (~25 min — slow but it works, confirming the hardware handles this fine). `docker compose run app python scripts/verify_setup.py` then hit `ModuleNotFoundError: No module named 'src'` — running a script by file path only puts that script's own directory on `sys.path`, not the project root, so the `from src...` imports couldn't resolve. Fixed by adding `scripts/__init__.py` and switching every invocation to module style (`python -m scripts.verify_setup`), which adds the current working directory to `sys.path` automatically. Applied consistently in `README.md`, both scripts' docstrings, and the keepalive GitHub Action, since it had the identical latent bug and hadn't been run yet. Reproduced the failure and confirmed the fix in isolation before sending it back.
 
 ## Open Questions
 
