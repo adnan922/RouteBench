@@ -9,8 +9,8 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 ## Current Status (read this first)
 
 **Phase:** 1 — Router / Cascade, in progress.
-**Last thing done:** Baseline runners (`src/eval/runners.py`) built — always-cheap, always-expensive, random-routing — with a shared `FakeProvider` test double (`tests/fakes.py`) so the orchestration logic is fully unit-tested without needing real API keys. 10 new tests, all passing.
-**Next thing to do:** Run the integration tests for real on the home server (`pytest -m integration` — needs real Groq/SambaNova keys, already in `.env`), then move to query feature extraction for the router classifier.
+**Last thing done:** Baseline runners fully verified — 29 unit tests passed, and all 4 integration tests passed against real Groq and SambaNova calls (58.91s unit run, 13.32s integration run). Routing, grading, and result packaging all confirmed correct end-to-end, not just in isolation.
+**Next thing to do:** Query feature extraction (fastembed embeddings + hand-crafted features) — the input the router classifier will train on.
 **Blocked on:** Nothing.
 
 ---
@@ -44,7 +44,7 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 
 **Phase 1 — Router / Cascade**
 - [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
-- [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), integration tests written and ready (need your real keys to actually run)
+- [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), and integration-verified end-to-end on the real home server (real Groq + SambaNova calls, correctly graded)
 - [ ] Query feature extraction (fastembed embeddings + hand-crafted features)
 - [ ] Train initial router classifier (logistic regression baseline)
 - [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
@@ -157,6 +157,9 @@ Ran `docker compose run app python -m pytest -v -m network` on the home server. 
 
 **2026-07-16 — Baseline runners built**
 Implemented `run_always_cheap`, `run_always_expensive`, and `run_random`, plus `build_prompt()` which steers models toward a gradable answer format. Introduced `tests/fakes.py` (a `FakeProvider` test double) so the orchestration logic — routing decisions, result packaging, grading integration — is fully unit-tested without touching the network. No new dependencies this time, so no Docker rebuild needed, just the live-mounted code change. Real-API integration tests are written and marked to skip without keys; haven't been run for real yet.
+
+**2026-07-16 — Baseline runners verified end-to-end**
+Ran the full suite on the home server. `pytest -m "not integration"`: 29 passed, 4 deselected, 58.91s — confirms all orchestration logic (routing, grading, result packaging) is correct. `pytest -m integration`: 4 passed, 13.32s — real Groq and SambaNova calls, both correctly graded. Baseline runners are done and proven, not just written. Router classifier is next.
 
 ## Open Questions
 
