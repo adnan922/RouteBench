@@ -8,9 +8,9 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 
 ## Current Status (read this first)
 
-**Phase:** 0 — Setup, functionally complete.
-**Last thing done:** `scripts/verify_setup.py` passed all three checks on the real home server — Groq, SambaNova, and Supabase all confirmed reachable and working end-to-end.
-**Next thing to do:** Phase 0 is fully wrapped — move into Phase 1: router baselines and feature extraction.
+**Phase:** 1 — Router / Cascade, in progress.
+**Last thing done:** Baseline runners fully verified — 29 unit tests passed, and all 4 integration tests passed against real Groq and SambaNova calls (58.91s unit run, 13.32s integration run). Routing, grading, and result packaging all confirmed correct end-to-end, not just in isolation.
+**Next thing to do:** Query feature extraction (fastembed embeddings + hand-crafted features) — the input the router classifier will train on.
 **Blocked on:** Nothing.
 
 ---
@@ -43,7 +43,8 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [x] On the home server: `docker compose build`, then `docker compose run app python -m scripts.verify_setup` — all three services PASS
 
 **Phase 1 — Router / Cascade**
-- [ ] Baseline runners: always-cheap, always-expensive, random-routing
+- [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
+- [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), and integration-verified end-to-end on the real home server (real Groq + SambaNova calls, correctly graded)
 - [ ] Query feature extraction (fastembed embeddings + hand-crafted features)
 - [ ] Train initial router classifier (logistic regression baseline)
 - [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
@@ -150,6 +151,15 @@ Confirmed Phase 1 dataset (GSM8K + MMLU-style mix) and Phase 2 domain (Retail Ph
 
 **2026-07-15 — Phase 0 verified end-to-end**
 Applied the module-invocation fix; re-ran `docker compose run app python -m scripts.verify_setup` on the real home server. All three services passed: Groq responded in 2.54s, SambaNova in 1.59s, Supabase's insert and heartbeat upsert both succeeded — confirming the schema was applied correctly. Phase 0 is functionally done. Remaining open items are just confirming the GitHub push and adding repo secrets, neither of which blocks starting Phase 1.
+
+**2026-07-16 — Dataset loader verified end-to-end**
+Ran `docker compose run app python -m pytest -v -m network` on the home server. First attempt hit `ModuleNotFoundError: No module named 'datasets'` — the image hadn't been rebuilt since `requirements.txt` picked up the new dependency, and `docker compose run` doesn't rebuild automatically. Rebuilt (`docker compose build`), reran, and the real network test passed: GSM8K and MMLU both downloaded and validated in 53s. Documented the rebuild gotcha in the README so it doesn't repeat in Phase 2.
+
+**2026-07-16 — Baseline runners built**
+Implemented `run_always_cheap`, `run_always_expensive`, and `run_random`, plus `build_prompt()` which steers models toward a gradable answer format. Introduced `tests/fakes.py` (a `FakeProvider` test double) so the orchestration logic — routing decisions, result packaging, grading integration — is fully unit-tested without touching the network. No new dependencies this time, so no Docker rebuild needed, just the live-mounted code change. Real-API integration tests are written and marked to skip without keys; haven't been run for real yet.
+
+**2026-07-16 — Baseline runners verified end-to-end**
+Ran the full suite on the home server. `pytest -m "not integration"`: 29 passed, 4 deselected, 58.91s — confirms all orchestration logic (routing, grading, result packaging) is correct. `pytest -m integration`: 4 passed, 13.32s — real Groq and SambaNova calls, both correctly graded. Baseline runners are done and proven, not just written. Router classifier is next.
 
 ## Open Questions
 

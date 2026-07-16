@@ -17,6 +17,8 @@ Phase 0 — infrastructure scaffolded, awaiting real credentials. See `PROGRESS.
 3. `docker compose build`
 4. `docker compose run app python -m scripts.verify_setup`
 
+**Gotcha:** `docker compose run` uses whatever image was last built — it does **not** pick up new entries in `requirements.txt` on its own. Run `docker compose build` again any time dependencies change, or you'll get a `ModuleNotFoundError` for a package that's clearly right there in the file.
+
 ## Stack
 
 Python · Groq · SambaNova Cloud · Supabase (Postgres) · Docker · GitHub Actions · Vercel (dashboard, Phase 3)
