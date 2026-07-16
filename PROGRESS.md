@@ -77,7 +77,7 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [ ]
 
 ### In Progress
-- **Phase 1 — Router / Cascade**
+*(nothing yet)*
 
 ### Blocked
 *(nothing yet)*
