@@ -8,9 +8,9 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 
 ## Current Status (read this first)
 
-**Phase:** 0 — Setup, functionally complete.
-**Last thing done:** `scripts/verify_setup.py` passed all three checks on the real home server — Groq, SambaNova, and Supabase all confirmed reachable and working end-to-end.
-**Next thing to do:** Phase 0 is fully wrapped — move into Phase 1: router baselines and feature extraction.
+**Phase:** 1 — Router / Cascade, in progress.
+**Last thing done:** Baseline runners (`src/eval/runners.py`) built — always-cheap, always-expensive, random-routing — with a shared `FakeProvider` test double (`tests/fakes.py`) so the orchestration logic is fully unit-tested without needing real API keys. 10 new tests, all passing.
+**Next thing to do:** Run the integration tests for real on the home server (`pytest -m integration` — needs real Groq/SambaNova keys, already in `.env`), then move to query feature extraction for the router classifier.
 **Blocked on:** Nothing.
 
 ---
@@ -43,7 +43,8 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [x] On the home server: `docker compose build`, then `docker compose run app python -m scripts.verify_setup` — all three services PASS
 
 **Phase 1 — Router / Cascade**
-- [ ] Baseline runners: always-cheap, always-expensive, random-routing
+- [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
+- [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), integration tests written and ready (need your real keys to actually run)
 - [ ] Query feature extraction (fastembed embeddings + hand-crafted features)
 - [ ] Train initial router classifier (logistic regression baseline)
 - [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
@@ -150,6 +151,12 @@ Confirmed Phase 1 dataset (GSM8K + MMLU-style mix) and Phase 2 domain (Retail Ph
 
 **2026-07-15 — Phase 0 verified end-to-end**
 Applied the module-invocation fix; re-ran `docker compose run app python -m scripts.verify_setup` on the real home server. All three services passed: Groq responded in 2.54s, SambaNova in 1.59s, Supabase's insert and heartbeat upsert both succeeded — confirming the schema was applied correctly. Phase 0 is functionally done. Remaining open items are just confirming the GitHub push and adding repo secrets, neither of which blocks starting Phase 1.
+
+**2026-07-16 — Dataset loader verified end-to-end**
+Ran `docker compose run app python -m pytest -v -m network` on the home server. First attempt hit `ModuleNotFoundError: No module named 'datasets'` — the image hadn't been rebuilt since `requirements.txt` picked up the new dependency, and `docker compose run` doesn't rebuild automatically. Rebuilt (`docker compose build`), reran, and the real network test passed: GSM8K and MMLU both downloaded and validated in 53s. Documented the rebuild gotcha in the README so it doesn't repeat in Phase 2.
+
+**2026-07-16 — Baseline runners built**
+Implemented `run_always_cheap`, `run_always_expensive`, and `run_random`, plus `build_prompt()` which steers models toward a gradable answer format. Introduced `tests/fakes.py` (a `FakeProvider` test double) so the orchestration logic — routing decisions, result packaging, grading integration — is fully unit-tested without touching the network. No new dependencies this time, so no Docker rebuild needed, just the live-mounted code change. Real-API integration tests are written and marked to skip without keys; haven't been run for real yet.
 
 ## Open Questions
 
