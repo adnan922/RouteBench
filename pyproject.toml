@@ -6,4 +6,5 @@ target-version = "py311"
 testpaths = ["tests"]
 markers = [
     "integration: tests that hit real external APIs (skipped by default without live keys)",
+    "network: tests that need internet access to an external dataset host (e.g. Hugging Face Hub) — blocked in this dev sandbox, fine on your server or in CI",
 ]

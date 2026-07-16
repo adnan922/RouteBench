@@ -3,6 +3,7 @@ supabase>=2.5
 fastembed>=0.3
 scikit-learn>=1.4
 lightgbm>=4.3
+datasets>=2.19
 python-dotenv>=1.0
 pytest>=8.0
 ruff>=0.4
