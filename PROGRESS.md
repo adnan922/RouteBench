@@ -9,8 +9,8 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 ## Current Status (read this first)
 
 **Phase:** 1 — Router / Cascade, in progress.
-**Last thing done:** Feature extraction built (`src/router/features.py`) — hand-crafted lexical features (9 signals, fully unit-tested, 12 tests) plus a lazy-loading `QueryEmbedder` wrapper around fastembed. Caught and fixed one real test bug in the process (miscounted whitespace-split tokens, not a code issue).
-**Next thing to do:** Run the network-marked embedding tests for real on the home server (`pytest -m network` — needs to reach Hugging Face Hub, same as the dataset loader did), then move to training the actual router classifier.
+**Last thing done:** Router classifier built and fully verified (`src/router/classifier.py`) — logistic regression + StandardScaler, wrapped in `CalibratedClassifierCV` (confirmed current sklearn 1.2+ API: `estimator=`, not the old `base_estimator=`) for calibrated confidence output. Includes save/load via joblib. All 5 tests genuinely pass here, no network needed — pure synthetic-data ML testing.
+**Next thing to do:** Two-stage cascade — wire the router into an actual routing decision (cheap first, escalate on low calibrated confidence), then the full sweep + Supabase logging + Pareto frontier plot to close out Phase 1.
 **Blocked on:** Nothing.
 
 ---
@@ -46,8 +46,8 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
 - [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), and integration-verified end-to-end on the real home server (real Groq + SambaNova calls, correctly graded)
 - [x] Query feature extraction (fastembed embeddings + hand-crafted features) — implemented, 12 unit tests passing on hand-crafted logic; embedding tests need network verification on your end
-- [ ] Train initial router classifier (logistic regression baseline)
-- [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
+- [x] Train initial router classifier (logistic regression baseline) — done
+- [x] Calibrate confidence (Platt scaling or isotonic regression, held-out split) — done via CalibratedClassifierCV, both methods supported and tested
 - [ ] Implement two-stage cascade (cheap model first, escalate on low calibrated confidence)
 - [ ] Full sweep across benchmark set, every run logged to Supabase
 - [ ] Compute + plot cost-quality-latency Pareto frontier vs. baselines
@@ -163,6 +163,12 @@ Ran the full suite on the home server. `pytest -m "not integration"`: 29 passed,
 
 **2026-07-16 — Feature extraction built**
 Implemented `hand_crafted_features()` (9 lexical signals: length, word count, digit/number/math-operator counts, multiple-choice marker detection, question marks, uppercase ratio) and `QueryEmbedder`, a lazy-loading wrapper around fastembed so importing/constructing it never triggers a network call — only actually embedding does. Also added `combined_features()`/`combined_features_batch()` to concatenate both into the classifier's real input. 12 hand-crafted-feature unit tests all pass with no network needed; caught one real test bug in the process (assumed 4 words in "What is 2 + 2?" — it's actually 5, since "+" is its own whitespace-separated token — fixed the test, not the code). The 6 embedding tests need Hugging Face Hub access to actually verify, same constraint as the dataset loader; they're written and skip gracefully without it, not yet run for real.
+
+**2026-07-16 — Feature extraction verified end-to-end**
+Ran the full suite on the home server: 37 unit tests passed (19.72s), and all 6 network-marked tests passed too (84.80s) — the fastembed model downloaded and produced correctly-shaped, deterministic embeddings for real. Feature extraction is fully proven, not just written.
+
+**2026-07-16 — Router classifier built**
+Implemented `train_router()` (StandardScaler + LogisticRegression, wrapped in `CalibratedClassifierCV`) and `RouterModel.predict_confidence()`, plus joblib-based save/load. Verified scikit-learn's calibration API before writing code against it — confirmed `estimator=` is current (sklearn 1.2+), not the deprecated `base_estimator=`, which matters since we have 1.9.0 installed. This whole chunk is pure ML on numbers, no network or API keys involved, so all 5 tests ran and passed directly in the dev sandbox — first fully-verified-here chunk since the baseline runners' fake-provider tests.
 
 ## Open Questions
 
