@@ -9,8 +9,8 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 ## Current Status (read this first)
 
 **Phase:** 1 — Router / Cascade, in progress.
-**Last thing done:** Baseline runners fully verified — 29 unit tests passed, and all 4 integration tests passed against real Groq and SambaNova calls (58.91s unit run, 13.32s integration run). Routing, grading, and result packaging all confirmed correct end-to-end, not just in isolation.
-**Next thing to do:** Query feature extraction (fastembed embeddings + hand-crafted features) — the input the router classifier will train on.
+**Last thing done:** Feature extraction built (`src/router/features.py`) — hand-crafted lexical features (9 signals, fully unit-tested, 12 tests) plus a lazy-loading `QueryEmbedder` wrapper around fastembed. Caught and fixed one real test bug in the process (miscounted whitespace-split tokens, not a code issue).
+**Next thing to do:** Run the network-marked embedding tests for real on the home server (`pytest -m network` — needs to reach Hugging Face Hub, same as the dataset loader did), then move to training the actual router classifier.
 **Blocked on:** Nothing.
 
 ---
@@ -45,7 +45,7 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 **Phase 1 — Router / Cascade**
 - [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
 - [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), and integration-verified end-to-end on the real home server (real Groq + SambaNova calls, correctly graded)
-- [ ] Query feature extraction (fastembed embeddings + hand-crafted features)
+- [x] Query feature extraction (fastembed embeddings + hand-crafted features) — implemented, 12 unit tests passing on hand-crafted logic; embedding tests need network verification on your end
 - [ ] Train initial router classifier (logistic regression baseline)
 - [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
 - [ ] Implement two-stage cascade (cheap model first, escalate on low calibrated confidence)
@@ -160,6 +160,9 @@ Implemented `run_always_cheap`, `run_always_expensive`, and `run_random`, plus `
 
 **2026-07-16 — Baseline runners verified end-to-end**
 Ran the full suite on the home server. `pytest -m "not integration"`: 29 passed, 4 deselected, 58.91s — confirms all orchestration logic (routing, grading, result packaging) is correct. `pytest -m integration`: 4 passed, 13.32s — real Groq and SambaNova calls, both correctly graded. Baseline runners are done and proven, not just written. Router classifier is next.
+
+**2026-07-16 — Feature extraction built**
+Implemented `hand_crafted_features()` (9 lexical signals: length, word count, digit/number/math-operator counts, multiple-choice marker detection, question marks, uppercase ratio) and `QueryEmbedder`, a lazy-loading wrapper around fastembed so importing/constructing it never triggers a network call — only actually embedding does. Also added `combined_features()`/`combined_features_batch()` to concatenate both into the classifier's real input. 12 hand-crafted-feature unit tests all pass with no network needed; caught one real test bug in the process (assumed 4 words in "What is 2 + 2?" — it's actually 5, since "+" is its own whitespace-separated token — fixed the test, not the code). The 6 embedding tests need Hugging Face Hub access to actually verify, same constraint as the dataset loader; they're written and skip gracefully without it, not yet run for real.
 
 ## Open Questions
 
