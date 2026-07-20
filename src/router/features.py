@@ -18,6 +18,7 @@ actual classifier input.
 from __future__ import annotations
 
 import re
+from typing import Protocol
 
 HAND_CRAFTED_FEATURE_NAMES = [
     "char_length",
@@ -68,6 +69,14 @@ def hand_crafted_vector(query: str) -> list[float]:
     return [features[name] for name in HAND_CRAFTED_FEATURE_NAMES]
 
 
+class EmbedderLike(Protocol):
+    """Structural type for anything with .embed()/.embed_one() matching
+    QueryEmbedder — lets tests substitute a fake embedder."""
+
+    def embed_one(self, text: str) -> list[float]: ...
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
 class QueryEmbedder:
     """Thin, lazily-initialized wrapper around fastembed's TextEmbedding.
 
@@ -108,13 +117,13 @@ class QueryEmbedder:
         return self.embed([text])[0]
 
 
-def combined_features(query: str, embedder: QueryEmbedder) -> list[float]:
+def combined_features(query: str, embedder: EmbedderLike) -> list[float]:
     """Concatenate a query's embedding with its hand-crafted features into
     one flat vector — this is what actually feeds the router classifier."""
     return embedder.embed_one(query) + hand_crafted_vector(query)
 
 
-def combined_features_batch(queries: list[str], embedder: QueryEmbedder) -> list[list[float]]:
+def combined_features_batch(queries: list[str], embedder: EmbedderLike) -> list[list[float]]:
     """Batched version of combined_features() — uses fastembed's internal
     batching instead of embedding one query at a time."""
     embeddings = embedder.embed(queries)

@@ -30,3 +30,42 @@ class FakeProvider:
             completion_tokens=5,
             latency_s=0.01,
         )
+
+
+class FakeEmbedder:
+    """Stands in for QueryEmbedder — a deterministic small vector derived
+    from text length, no real model downloaded."""
+
+    def embed_one(self, text: str) -> list[float]:
+        return [float(len(text) % 10) / 10.0]
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_one(t) for t in texts]
+
+
+class FakeRouterModel:
+    """Stands in for RouterModel — returns a fixed confidence regardless of
+    input, so cascade/sweep tests can isolate their own logic from whether
+    the classifier itself learned anything (that's covered separately in
+    tests/test_classifier.py)."""
+
+    def __init__(self, fixed_confidence: float = 0.5) -> None:
+        self.fixed_confidence = fixed_confidence
+
+    def predict_confidence(self, features: list[float]) -> float:
+        return self.fixed_confidence
+
+
+class FakeSupabaseLogger:
+    """Stands in for SupabaseLogger — records log_run() calls in memory
+    instead of hitting a real database."""
+
+    def __init__(self) -> None:
+        self.logged_runs: list[dict] = []
+
+    def log_run(self, **fields) -> dict:
+        self.logged_runs.append(fields)
+        return fields
+
+    def ping_heartbeat(self) -> None:
+        pass

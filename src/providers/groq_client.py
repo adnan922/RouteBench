@@ -20,4 +20,6 @@ class GroqProvider(OpenAICompatibleProvider):
     default_base_url = "https://api.groq.com/openai/v1"
     api_key_env_var = "GROQ_API_KEY"
     model_env_var = "GROQ_MODEL"
+    min_interval_env_var = "GROQ_MIN_INTERVAL_S"
+    default_min_interval_s = 1.0  # Groq's free tier has been the least rate-limit-prone in practice
     fallback_model = "llama-3.1-8b-instant"  # Groq's cheap/fast tier — verify in console

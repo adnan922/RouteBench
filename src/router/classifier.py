@@ -11,12 +11,20 @@ as actual probabilities.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import joblib
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+
+
+class RouterLike(Protocol):
+    """Structural type for anything with a .predict_confidence() matching
+    RouterModel — lets tests substitute a fake router."""
+
+    def predict_confidence(self, features: list[float]) -> float: ...
 
 
 @dataclass
