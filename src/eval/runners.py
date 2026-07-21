@@ -12,7 +12,9 @@ import random
 from dataclasses import dataclass
 from typing import Protocol
 
+from src.eval.budget import BudgetExceededError, CostTracker
 from src.eval.dataset import Task, grade
+from src.eval.pricing import estimate_cost
 
 
 class Provider(Protocol):
@@ -34,7 +36,10 @@ class RunResult:
     completion_tokens: int
     latency_s: float
     response: str
+    query: str
     subject: str | None = None  # MMLU subject, carried through for later analysis
+    router_confidence: float | None = None  # set for cascade runs, None for the baselines
+    estimated_cost_usd: float | None = None
 
 
 def build_prompt(task: Task) -> list[dict]:
@@ -59,8 +64,34 @@ def build_prompt(task: Task) -> list[dict]:
     ]
 
 
-def _run_single(task: Task, provider: Provider, route_decision: str) -> RunResult:
+def run_single(
+    task: Task,
+    provider: Provider,
+    route_decision: str,
+    router_confidence: float | None = None,
+    cost_tracker: CostTracker | None = None,
+) -> RunResult:
+    """Run one task through one provider and package a graded result.
+
+    Public (not prefixed `_`) because src/router/cascade.py reuses it
+    directly — the cascade needs the exact same single-task execution and
+    grading logic as the baselines, just with a routing decision that comes
+    from a classifier instead of a fixed strategy.
+
+    If `cost_tracker` is given, raises BudgetExceededError *before* making
+    the call if the budget is already spent — callers (the run_* functions
+    below) catch this to stop early without losing whatever completed so far.
+    """
+    if cost_tracker is not None:
+        cost_tracker.check_before_call()
+
     result = provider.complete(build_prompt(task))
+    cost_usd = estimate_cost(
+        result.provider, result.model, result.prompt_tokens, result.completion_tokens
+    )
+    if cost_tracker is not None:
+        cost_tracker.record(cost_usd)
+
     return RunResult(
         task_id=task.task_id,
         dataset=task.dataset,
@@ -72,18 +103,47 @@ def _run_single(task: Task, provider: Provider, route_decision: str) -> RunResul
         completion_tokens=result.completion_tokens,
         latency_s=result.latency_s,
         response=result.content,
+        query=task.question,
         subject=task.subject,
+        router_confidence=router_confidence,
+        estimated_cost_usd=cost_usd,
     )
 
 
-def run_always_cheap(tasks: list[Task], cheap_provider: Provider) -> list[RunResult]:
-    """Every task goes to the cheap/fast tier. Upper bound on cost savings, lower bound on quality."""
-    return [_run_single(task, cheap_provider, route_decision="cheap") for task in tasks]
+def run_always_cheap(
+    tasks: list[Task], cheap_provider: Provider, cost_tracker: CostTracker | None = None
+) -> list[RunResult]:
+    """Every task goes to the cheap/fast tier. Upper bound on cost savings, lower bound on quality.
+
+    Stops early (keeping whatever completed so far) if cost_tracker's budget
+    is exhausted partway through, rather than losing all progress.
+    """
+    results = []
+    for task in tasks:
+        try:
+            results.append(
+                run_single(task, cheap_provider, route_decision="cheap", cost_tracker=cost_tracker)
+            )
+        except BudgetExceededError:
+            break
+    return results
 
 
-def run_always_expensive(tasks: list[Task], expensive_provider: Provider) -> list[RunResult]:
+def run_always_expensive(
+    tasks: list[Task], expensive_provider: Provider, cost_tracker: CostTracker | None = None
+) -> list[RunResult]:
     """Every task goes to the strong/slow tier. Upper bound on quality, upper bound on cost."""
-    return [_run_single(task, expensive_provider, route_decision="expensive") for task in tasks]
+    results = []
+    for task in tasks:
+        try:
+            results.append(
+                run_single(
+                    task, expensive_provider, route_decision="expensive", cost_tracker=cost_tracker
+                )
+            )
+        except BudgetExceededError:
+            break
+    return results
 
 
 def run_random(
@@ -92,6 +152,7 @@ def run_random(
     expensive_provider: Provider,
     p_expensive: float = 0.5,
     seed: int = 42,
+    cost_tracker: CostTracker | None = None,
 ) -> list[RunResult]:
     """Randomly assign each task to a tier, independent of task difficulty.
 
@@ -103,8 +164,15 @@ def run_random(
     rng = random.Random(seed)
     results = []
     for task in tasks:
-        if rng.random() < p_expensive:
-            results.append(_run_single(task, expensive_provider, route_decision="expensive"))
-        else:
-            results.append(_run_single(task, cheap_provider, route_decision="cheap"))
+        provider, decision = (
+            (expensive_provider, "expensive")
+            if rng.random() < p_expensive
+            else (cheap_provider, "cheap")
+        )
+        try:
+            results.append(
+                run_single(task, provider, route_decision=decision, cost_tracker=cost_tracker)
+            )
+        except BudgetExceededError:
+            break
     return results

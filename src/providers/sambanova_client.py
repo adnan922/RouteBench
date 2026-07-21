@@ -20,4 +20,6 @@ class SambaNovaProvider(OpenAICompatibleProvider):
     default_base_url = "https://api.sambanova.ai/v1"
     api_key_env_var = "SAMBANOVA_API_KEY"
     model_env_var = "SAMBANOVA_MODEL"
+    min_interval_env_var = "SAMBANOVA_MIN_INTERVAL_S"
+    default_min_interval_s = 4.0  # more conservative — this is the one that actually got rate-limited
     fallback_model = "Meta-Llama-3.3-70B-Instruct"  # SambaNova's most battle-tested model — verify in console

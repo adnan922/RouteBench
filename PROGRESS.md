@@ -9,8 +9,8 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 ## Current Status (read this first)
 
 **Phase:** 1 — Router / Cascade, in progress.
-**Last thing done:** Baseline runners fully verified — 29 unit tests passed, and all 4 integration tests passed against real Groq and SambaNova calls (58.91s unit run, 13.32s integration run). Routing, grading, and result packaging all confirmed correct end-to-end, not just in isolation.
-**Next thing to do:** Query feature extraction (fastembed embeddings + hand-crafted features) — the input the router classifier will train on.
+**Last thing done:** Switched expensive tier default to Gemini 3.1 Flash Lite (15 RPM / 250K TPM / 500 RPD free tier — RPD comfortably covers a full sweep) after SambaNova kept failing and Gemini 3.5 Flash's 20/day cap proved too small. Model string, pricing, and throttle all verified/tuned for this specific tier. 87 tests passing.
+**Next thing to do:** Run `scripts/run_phase1_sweep.py` for real with `EXPENSIVE_PROVIDER=gemini`. If it completes: Pareto frontier plot + findings write-up closes out Phase 1. SambaNova's root cause is still an open thread — worth sharing the exact new error text if you want to revisit it later, but it's not blocking anymore.
 **Blocked on:** Nothing.
 
 ---
@@ -45,11 +45,11 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 **Phase 1 — Router / Cascade**
 - [x] Benchmark dataset (GSM8K + MMLU-style mix) + grading logic — implemented, unit-tested (18 tests), and network-verified end-to-end on the real home server
 - [x] Baseline runners: always-cheap, always-expensive, random-routing — implemented, unit-tested (10 tests via a fake provider), and integration-verified end-to-end on the real home server (real Groq + SambaNova calls, correctly graded)
-- [ ] Query feature extraction (fastembed embeddings + hand-crafted features)
-- [ ] Train initial router classifier (logistic regression baseline)
-- [ ] Calibrate confidence (Platt scaling or isotonic regression, held-out split)
-- [ ] Implement two-stage cascade (cheap model first, escalate on low calibrated confidence)
-- [ ] Full sweep across benchmark set, every run logged to Supabase
+- [x] Query feature extraction (fastembed embeddings + hand-crafted features) — implemented, 12 unit tests passing on hand-crafted logic; embedding tests need network verification on your end
+- [x] Train initial router classifier (logistic regression baseline) — done
+- [x] Calibrate confidence (Platt scaling or isotonic regression, held-out split) — done via CalibratedClassifierCV, both methods supported and tested
+- [x] Implement two-stage cascade (cheap model first, escalate on low calibrated confidence) — done, 5 tests passing (fake router + fake provider)
+- [x] Full sweep across benchmark set, every run logged to Supabase — orchestration built (`src/eval/sweep.py`, `scripts/run_phase1_sweep.py`), wiring fully unit-tested (5 tests); the real end-to-end run against live APIs hasn't happened yet — that's the next thing to actually do
 - [ ] Compute + plot cost-quality-latency Pareto frontier vs. baselines
 - [ ] Write up Phase 1 findings
 - [ ] *Optional:* add a prompted-LLM router as a second variant for comparison
@@ -160,6 +160,30 @@ Implemented `run_always_cheap`, `run_always_expensive`, and `run_random`, plus `
 
 **2026-07-16 — Baseline runners verified end-to-end**
 Ran the full suite on the home server. `pytest -m "not integration"`: 29 passed, 4 deselected, 58.91s — confirms all orchestration logic (routing, grading, result packaging) is correct. `pytest -m integration`: 4 passed, 13.32s — real Groq and SambaNova calls, both correctly graded. Baseline runners are done and proven, not just written. Router classifier is next.
+
+**2026-07-16 — Feature extraction built**
+Implemented `hand_crafted_features()` (9 lexical signals: length, word count, digit/number/math-operator counts, multiple-choice marker detection, question marks, uppercase ratio) and `QueryEmbedder`, a lazy-loading wrapper around fastembed so importing/constructing it never triggers a network call — only actually embedding does. Also added `combined_features()`/`combined_features_batch()` to concatenate both into the classifier's real input. 12 hand-crafted-feature unit tests all pass with no network needed; caught one real test bug in the process (assumed 4 words in "What is 2 + 2?" — it's actually 5, since "+" is its own whitespace-separated token — fixed the test, not the code). The 6 embedding tests need Hugging Face Hub access to actually verify, same constraint as the dataset loader; they're written and skip gracefully without it, not yet run for real.
+
+**2026-07-16 — Feature extraction verified end-to-end**
+Ran the full suite on the home server: 37 unit tests passed (19.72s), and all 6 network-marked tests passed too (84.80s) — the fastembed model downloaded and produced correctly-shaped, deterministic embeddings for real. Feature extraction is fully proven, not just written.
+
+**2026-07-16 — Router classifier built**
+Implemented `train_router()` (StandardScaler + LogisticRegression, wrapped in `CalibratedClassifierCV`) and `RouterModel.predict_confidence()`, plus joblib-based save/load. Verified scikit-learn's calibration API before writing code against it — confirmed `estimator=` is current (sklearn 1.2+), not the deprecated `base_estimator=`, which matters since we have 1.9.0 installed. This whole chunk is pure ML on numbers, no network or API keys involved, so all 5 tests ran and passed directly in the dev sandbox — first fully-verified-here chunk since the baseline runners' fake-provider tests.
+
+**2026-07-16 — Cascade and full sweep built**
+Implemented `CascadeRouter.decide()` (threshold on calibrated confidence) and `run_cascade()`, plus `src/eval/sweep.py` (train/test split, `train_router_from_baseline()`, `log_results()`) and the runnable entry point `scripts/run_phase1_sweep.py`. Refactored `runners.py`: made `run_single` public and added `query`/`router_confidence` fields to `RunResult`, since cascade runs needed to carry their confidence score through to Supabase. Added `FakeEmbedder`, `FakeRouterModel`, and `FakeSupabaseLogger` to `tests/fakes.py` so the entire cascade+sweep wiring is testable without touching the network — 10 new tests, 52 total, all passing. Ruff caught a real bug immediately: a leftover duplicate `EmbedderLike` class definition from an in-progress edit, fixed before it ever reached a test run. The actual experiment script hasn't been run for real yet — that's next.
+
+**2026-07-17 — Rate limit hit and fixed**
+Real sweep run against SambaNova hit `openai.RateLimitError` during the always-expensive baseline (24 test tasks after earlier quota already used in integration testing). Rather than a one-off patch, added retry-with-backoff and proactive per-provider throttling directly to `OpenAICompatibleProvider` (both tunable via env var), added a `GeminiProvider` (Google AI Studio, confirmed OpenAI-compatible endpoint against current docs) as an alternative expensive tier, and a provider registry (`get_provider()`) so which provider plays which role is now env-config, not hardcoded. 11 new tests, all passing, including one that reconstructs the exact `RateLimitError` from the traceback and confirms the retry logic recovers from it. Full suite: 63 passed.
+
+**2026-07-17 — Cost estimation and hard budget guard added**
+Built `src/eval/pricing.py` (verified current per-token pricing: Groq $0.05/$0.08, SambaNova $0.60/$1.20, both confirmed against 5+ sources; Gemini had conflicting figures across sources so deliberately used the higher/more conservative $0.30/$2.50 rather than risk underestimating) and `src/eval/budget.py` (`CostTracker`/`BudgetExceededError` — checks before every call, raises once the ceiling is hit). Wired both through `run_single` and all four runners (`run_always_cheap`, `run_always_expensive`, `run_random`, `run_cascade`), each catching the budget error internally and returning whatever completed so far rather than losing progress. `scripts/run_phase1_sweep.py` now has a `BUDGET_USD` env var (default $1.00) and stops cleanly between stages if exceeded, logging a clear message rather than a raw crash. Fixed a subtle alignment issue in `train_router_from_baseline`: if the budget guard stops the training baseline early, features/labels now correctly use only the completed prefix, not the full task list. 18 new tests, 81 total, all passing — including tests that genuinely verify partial-progress preservation, not just that an exception gets raised.
+
+**2026-07-19 — Diagnosed and fixed the real Gemini rate limit**
+Screenshot from Google AI Studio's own dashboard showed the actual cause: `gemini-3.5-flash`'s free tier was capped at 20 requests **per day** (RPD 21/20), not a per-minute rate — confirmed by the error's `quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier`. A 1-1.5 minute delay between calls, as proposed, could not have fixed this — no amount of spacing gets you past a fixed daily total, and the sweep needs well over 20 expensive-tier calls. Added `DailyQuotaExceededError` detection to the provider base class (string-matched against the real error text, tested against it directly) so a daily-quota 429 fails fast instead of burning through 5 retries with exponential backoff pointlessly; wired it into all four runners' graceful-stop-preserve-partial-results handling alongside `BudgetExceededError`. Updated Gemini's default model to `gemini-3.5-flash` (2.5 isn't available to new accounts) and throttle to 15s given an observed 5 RPM limit, and added its real pricing ($1.50/$9.00 per 1M, confirmed). Recommendation going forward: use SambaNova as the expensive tier (RPM-based limits respond to throttling; Gemini's 20/day free-tier cap structurally doesn't). 5 new tests, 86 total, all passing.
+
+**2026-07-19 — Switched expensive tier to Gemini 3.1 Flash Lite**
+SambaNova continued failing with the same rate limit even after throttling/retry — not yet root-caused (no new error text shared to diagnose whether it's still RPM, a lingering daily/credit exhaustion from earlier testing, or something else). Given a second Google AI Studio screenshot showing `gemini-3.1-flash-lite`'s free tier at 15 RPM / 250K TPM / 500 RPD — RPD=500 comfortably covers a full sweep, unlike 3.5-flash's 20/day wall — switched the default expensive tier to Gemini Flash Lite. Confirmed the model string and pricing ($0.25/$1.50 per 1M) against 6+ current sources. Only RPM needs throttling here (set to 5s, ~12 RPM effective); TPM=250K is far more headroom than RPM could ever consume at these token volumes, so no separate token-bucket throttle was added — would be complexity with no practical effect. 1 new test, 87 total, all passing. SambaNova's failure is still an open thread if it's worth revisiting later.
 
 ## Open Questions
 
