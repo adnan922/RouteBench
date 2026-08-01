@@ -4,7 +4,7 @@
 
 > Working title — rename freely once you've got a git repo and a personal favorite.
 
-*Last updated: 2026-07-15 · Status: Phase 0 in progress — repo scaffolded, awaiting your API keys and accounts*
+*Last updated: 2026-07-19 · Status: Phase 1 complete — router, cascade, and Pareto frontier analysis all verified end-to-end. Phase 2 (pharmacy agent, pass^k reliability) not yet started.*
 
 ---
 

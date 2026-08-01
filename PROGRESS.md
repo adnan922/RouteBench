@@ -9,8 +9,9 @@ This is the living half of the project documentation. `PROJECT.md` explains what
 ## Current Status (read this first)
 
 **Phase:** 1 — Router / Cascade, in progress.
-**Last thing done:** Switched expensive tier default to Gemini 3.1 Flash Lite (15 RPM / 250K TPM / 500 RPD free tier — RPD comfortably covers a full sweep) after SambaNova kept failing and Gemini 3.5 Flash's 20/day cap proved too small. Model string, pricing, and throttle all verified/tuned for this specific tier. 87 tests passing.
-**Next thing to do:** Run `scripts/run_phase1_sweep.py` for real with `EXPENSIVE_PROVIDER=gemini`. If it completes: Pareto frontier plot + findings write-up closes out Phase 1. SambaNova's root cause is still an open thread — worth sharing the exact new error text if you want to revisit it later, but it's not blocking anymore.
+**Phase:** 1 — Router / Cascade, complete. Ready for Phase 2.
+**Last thing done:** Full sweep ran for real ($0.0138 total cost, all four strategies against real Groq + Gemini). Built the Pareto frontier analysis — reconstructs the cascade's cost/accuracy/latency across a full sweep of confidence thresholds using only data already in Supabase (no new API calls), plots it against the three baselines, and auto-generates `PHASE1_FINDINGS.md` with the data tables filled in. 97 tests passing.
+**Next thing to do:** Run `scripts/analyze_phase1.py`, open `PHASE1_FINDINGS.md`, and fill in the RQ1 interpretation section — that part's deliberately left for you, not auto-written. Then decide: move to Phase 2 (pharmacy agent + pass^k reliability), or first pick up the optional LLM-prompted router comparison.
 **Blocked on:** Nothing.
 
 ---
@@ -50,9 +51,9 @@ Move items between sections as you work. Keep **In Progress** short — 1-2 item
 - [x] Calibrate confidence (Platt scaling or isotonic regression, held-out split) — done via CalibratedClassifierCV, both methods supported and tested
 - [x] Implement two-stage cascade (cheap model first, escalate on low calibrated confidence) — done, 5 tests passing (fake router + fake provider)
 - [x] Full sweep across benchmark set, every run logged to Supabase — orchestration built (`src/eval/sweep.py`, `scripts/run_phase1_sweep.py`), wiring fully unit-tested (5 tests); the real end-to-end run against live APIs hasn't happened yet — that's the next thing to actually do
-- [ ] Compute + plot cost-quality-latency Pareto frontier vs. baselines
-- [ ] Write up Phase 1 findings
-- [ ] *Optional:* add a prompted-LLM router as a second variant for comparison
+- [x] Compute + plot cost-quality-latency Pareto frontier vs. baselines — reconstructed across all thresholds from data already collected, zero new API calls (`src/eval/analysis.py`, `scripts/analyze_phase1.py`)
+- [x] Write up Phase 1 findings — auto-generated data tables in `PHASE1_FINDINGS.md`, interpretation section deliberately left for you
+- [ ] *Optional/stretch, deferred:* add a prompted-LLM router as a second variant for comparison
 
 **Phase 2 — Agent Reliability Benchmark**
 - [x] Design mini tool-use domain — DONE: Retail Pharmacy Inventory & Procurement, see `PROJECT.md` §3.1
@@ -184,6 +185,9 @@ Screenshot from Google AI Studio's own dashboard showed the actual cause: `gemin
 
 **2026-07-19 — Switched expensive tier to Gemini 3.1 Flash Lite**
 SambaNova continued failing with the same rate limit even after throttling/retry — not yet root-caused (no new error text shared to diagnose whether it's still RPM, a lingering daily/credit exhaustion from earlier testing, or something else). Given a second Google AI Studio screenshot showing `gemini-3.1-flash-lite`'s free tier at 15 RPM / 250K TPM / 500 RPD — RPD=500 comfortably covers a full sweep, unlike 3.5-flash's 20/day wall — switched the default expensive tier to Gemini Flash Lite. Confirmed the model string and pricing ($0.25/$1.50 per 1M) against 6+ current sources. Only RPM needs throttling here (set to 5s, ~12 RPM effective); TPM=250K is far more headroom than RPM could ever consume at these token volumes, so no separate token-bucket throttle was added — would be complexity with no practical effect. 1 new test, 87 total, all passing. SambaNova's failure is still an open thread if it's worth revisiting later.
+
+**2026-07-19 — Full sweep succeeded; Pareto frontier built**
+`scripts/run_phase1_sweep.py` completed end-to-end for real: benchmark loaded, router trained on the 56-task training split, all four strategies (always-cheap, always-expensive, random, cascade) ran against real Groq + Gemini on the 24-task test split, everything logged to Supabase. Total cost: $0.0138 of the $1.00 budget — nowhere close to the ceiling, confirming the budget guard's overhead-free when things go right. Built `src/eval/analysis.py`: reconstructs the cascade's accuracy/cost/latency at 21 different confidence thresholds using only the always-cheap and always-expensive baselines' already-collected results (each test task was run on *both* tiers already, so any threshold's outcome is fully determined by data already in hand) — a full Pareto curve with zero additional API calls. `scripts/analyze_phase1.py` fetches from Supabase, plots cost-vs-accuracy and cost-vs-latency, and writes `PHASE1_FINDINGS.md` with the data tables auto-filled but the RQ1 interpretation deliberately left blank. Verified the plotting and table-generation logic end-to-end with synthetic data standing in for Supabase (can't reach the real database from this sandbox). 10 new tests, 97 total, all passing. Phase 1 is functionally complete — only the optional LLM-prompted-router stretch item remains, deferred.
 
 ## Open Questions
 

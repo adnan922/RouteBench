@@ -38,3 +38,10 @@ class SupabaseLogger:
         self._client.table("heartbeat").upsert(
             {"id": 1, "pinged_at": datetime.now(timezone.utc).isoformat()}
         ).execute()
+    
+    def fetch_by_phase(self, phase: str) -> list[dict]:
+        """Retrieve every row logged under a given phase — used by
+        scripts/analyze_phase1.py to pull results back out for the Pareto
+        frontier analysis."""
+        response = self._client.table("runs").select("*").eq("phase", phase).execute()
+        return response.data
