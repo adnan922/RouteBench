@@ -4,8 +4,9 @@
 
 Pulls every logged run from Supabase, reconstructs the full cost/quality
 Pareto frontier for the cascade across many confidence thresholds (no new
-API calls needed — see src/eval/analysis.py for why), prints a summary,
-saves a plot, and writes PHASE1_FINDINGS.md with the data tables filled in.
+API calls needed — see src/eval/analysis.py for why), computes calibration/
+discrimination diagnostics, prints a summary, saves a plot, and writes
+PHASE1_FINDINGS.md with the data tables filled in.
 
 The findings file's interpretation section is deliberately left blank for
 you to fill in — the tables are objective and safe to auto-generate, but
@@ -25,6 +26,7 @@ load_dotenv()
 
 from src.db.supabase_client import SupabaseLogger  # noqa: E402
 from src.eval.analysis import RunRecord, pareto_frontier, summarize  # noqa: E402
+from src.eval.calibration import brier_score, calibration_table, discrimination_auc  # noqa: E402
 
 
 def to_records(rows: list[dict]) -> dict[str, RunRecord]:
@@ -84,6 +86,21 @@ for point in frontier:
         f"total_cost=${point['total_cost_usd']:.4f}"
     )
 
+# --- Calibration / discrimination diagnostics ---
+brier = brier_score(cheap_by_task, confidence_by_task)
+auc = discrimination_auc(cheap_by_task, confidence_by_task)
+cal_table = calibration_table(cheap_by_task, confidence_by_task)
+
+print("\n--- Router confidence quality ---")
+print(f"Brier score: {brier:.4f} (0=perfect, 0.25=no better than a coin flip)")
+print(f"Discrimination AUC: {auc:.4f} (0.5=no better than random, 1.0=perfect)")
+print("Calibration table (predicted confidence bucket vs actual cheap-tier accuracy):")
+for bucket in cal_table:
+    print(
+        f"  [{bucket.range_low:.2f}-{bucket.range_high:.2f}) n={bucket.n_tasks:3d}  "
+        f"predicted={bucket.mean_predicted_confidence:.2f}  actual={bucket.empirical_accuracy:.2f}"
+    )
+
 # --- Plot ---
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -124,6 +141,10 @@ frontier_table = "\n".join(
     f"| {p['threshold']:.2f} | {p['accuracy']:.1%} | ${p['total_cost_usd']:.4f} | {p['mean_latency_s']:.2f}s |"
     for p in frontier
 )
+calibration_table_md = "\n".join(
+    f"| [{b.range_low:.2f}-{b.range_high:.2f}) | {b.n_tasks} | {b.mean_predicted_confidence:.2f} | {b.empirical_accuracy:.2f} |"
+    for b in cal_table
+)
 
 findings_md = f"""# Phase 1 Findings — RouteBench
 
@@ -148,13 +169,18 @@ intentionally left for you to fill in.
 
 See `phase1_pareto_frontier.png` for the visual.
 
+## Router confidence quality
+
+- **Brier score:** {brier:.4f} (0 = perfect, 0.25 = no better than a coin flip)
+- **Discrimination AUC:** {auc:.4f} (0.5 = no better than random, 1.0 = perfect)
+
+| Confidence bucket | n tasks | Mean predicted | Actual accuracy |
+|---|---|---|---|
+{calibration_table_md}
+
 ## RQ1: Can a calibrated cascade approach strong-model quality at lower cost?
 
-*(Your interpretation goes here — look at where the cascade curve sits
-relative to the always-cheap and always-expensive points, and whether any
-threshold beats random routing at the same cost. A clean negative result is
-still a real finding — write down what actually happened, not what you
-expected to happen.)*
+*(Your interpretation goes here.)*
 """
 
 with open("PHASE1_FINDINGS.md", "w") as f:
