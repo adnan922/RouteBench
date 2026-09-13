@@ -48,7 +48,7 @@ def _stop_if_budget_exceeded(cost_tracker: CostTracker, stage_name: str) -> None
 
 
 print("Loading benchmark...")
-tasks = load_benchmark(n_gsm8k=40, n_mmlu=40)
+tasks = load_benchmark(n_gsm8k=250, n_mmlu=250)
 train_tasks, test_tasks = split_tasks(tasks)
 print(f"Train: {len(train_tasks)} tasks, Test: {len(test_tasks)} tasks")
 

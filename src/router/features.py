@@ -123,10 +123,17 @@ def combined_features(query: str, embedder: EmbedderLike) -> list[float]:
     return embedder.embed_one(query) + hand_crafted_vector(query)
 
 
-def combined_features_batch(queries: list[str], embedder: EmbedderLike) -> list[list[float]]:
-    """Batched version of combined_features() — uses fastembed's internal
-    batching instead of embedding one query at a time."""
-    embeddings = embedder.embed(queries)
+def combined_features_batch(
+    queries: list[str], embedder: EmbedderLike, batch_size: int = 25
+) -> list[list[float]]:
+    """Batched version of combined_features() — processes in smaller
+    sub-batches rather than one giant call, to keep peak memory bounded.
+    A single 350-item batch caused severe swap thrashing on this hardware
+    (4GB RAM, no AVX2) — this is the fix."""
+    all_embeddings = []
+    for i in range(0, len(queries), batch_size):
+        chunk = queries[i : i + batch_size]
+        all_embeddings.extend(embedder.embed(chunk))
     return [
-        embedding + hand_crafted_vector(query) for embedding, query in zip(embeddings, queries)
+        embedding + hand_crafted_vector(query) for embedding, query in zip(all_embeddings, queries)
     ]
